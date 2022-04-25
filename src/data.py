@@ -28,7 +28,6 @@ def get_chess(n=None):
         n = -1
     for path in gen:
         n -= 1
-        print(path)
         fen = path.stem.replace('-', '/')
         img = cv2.imread(str(path))
         yield fen, img
