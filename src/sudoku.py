@@ -91,9 +91,10 @@ def crop_sudoku_img(img, debug=False):
 
 for img, data in get_sudoku(n=None):
     try:
-        warped = crop_sudoku_img(img, debug=False)
+        warped = crop_sudoku_img(img, debug=True)
+        cv2.waitKey(0)
     except ImageError as e:
-        cv2.imshow("image", img)
+        cv2.imshow("ERROR", img)
         cv2.waitKey(0)
 
 
