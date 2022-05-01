@@ -1,4 +1,4 @@
-from chess import Board
+from chess import Board, Piece
 from data import get_chess
 import cv2
 
@@ -20,7 +20,7 @@ from math import floor, ceil
 #     )
 
 
-def split_squares(img, GRID_R, GRID_C):
+def split_squares(img, GRID_R, GRID_C, subimg_size=(24,24)):
     # Define the window size
     windowsize_r = img.shape[0] / GRID_R
     windowsize_c = img.shape[1] / GRID_C
@@ -31,6 +31,8 @@ def split_squares(img, GRID_R, GRID_C):
                 ceil(r * windowsize_r) : floor((r + 1) * windowsize_r),
                 ceil(c * windowsize_c) : floor((c + 1) * windowsize_c),
             ]
+
+            subimg = cv2.resize(subimg, subimg_size)
 
             yield (r, c), subimg
 
@@ -69,12 +71,11 @@ import torch.nn.functional as F
 
 class data_randomized_loader:
     def __init__(
-        self, lookahead=40, batch_size=32, img_size=(24, 24), subsample_empty=0
+        self, lookahead=40, batch_size=32, subsample_empty=6
     ):
         self.gen = get_chess()
         self.lookahead = lookahead
         self.batch_size = batch_size
-        self.img_size = img_size
         self.subsample_empty = subsample_empty
         self.batches = -1
         self.items = None
@@ -104,7 +105,7 @@ class data_randomized_loader:
                     else:
                         self.empty_count = 0
                         items.append(item)
-                        imgs.append(cv2.resize(subimg, self.img_size))
+                        imgs.append(subimg)
         self.items = np.array(items)
         self.imgs = np.array(imgs)
 
@@ -169,7 +170,7 @@ from pathlib import Path
 path = Path(__file__)
 save_loc = path.parent.absolute() / 'models' / 'chess_online_square.txt'
 
-train = False
+train = True
 if train:
     OCR_model = OCR_online_chess()
     OCR_model.train()
@@ -180,8 +181,8 @@ if train:
 
     data_loader = data_randomized_loader(batch_size=128, lookahead=100, subsample_empty=10)
 
-    data_loader.set_batches(1000)
-    updates = 300
+    data_loader.set_batches(500)
+    updates = 100
     running_loss = 0.0
     for i, data in enumerate(data_loader, 0):
         inputs, labels = data
@@ -219,16 +220,28 @@ def estimate_online_chess(img):
     for pos, subimg in split_squares(img, GRID_R=GRID_R, GRID_C=GRID_C):
         batch_imgs.append(subimg)
         positions.append(pos)
-        r, c = pos
-        square = (GRID_R - 1 - r) * GRID_C + c
-        # TODO put through OCR_model
+        # r, c = pos
+        # square = (GRID_R - 1 - r) * GRID_C + c
     batch_imgs = np.array(batch_imgs)
     batch_imgs = np.moveaxis(batch_imgs, 3, 1)
     batch_imgs = batch_imgs / 255
     batch_imgs = torch.FloatTensor(batch_imgs)
     # TODO perhaps calc. confidence and throw warning if not confident!
-    estimate = torch.argmax(OCR_model(batch_imgs), dim=1)
-    for item, pos in zip(estimate, ):
-        int_to_symbol(item)
+    OCR_model.eval()
+    estimate = OCR_model(batch_imgs)
+    estimate = torch.argmax(estimate, dim=1)
+    print(estimate)
+    for piece, pos in zip(estimate, positions):
+        # Squares go from bottom left to right to top, is range(64)
+        r, c = pos
+        square = (GRID_R - 1 - r) * GRID_C + c
+        piece = int_to_symbol(piece)
+        if piece is not None:
+            piece = Piece.from_symbol(piece)
+        board.set_piece_at(square, piece)
+    return board
 
-OCR_model
+for fen, img in get_chess(n=1):
+    board = estimate_online_chess(img)
+    print(board.fen())
+    print(fen)
