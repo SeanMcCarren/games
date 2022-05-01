@@ -39,7 +39,6 @@ def split_online_chess(fen, img):
     GRID_R = 8
     GRID_C = 8
     board = Board(fen)
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
     for pos, subimg in split_squares(img, GRID_R=GRID_R, GRID_C=GRID_C):
         r, c = pos
@@ -166,41 +165,70 @@ class OCR_online_chess(nn.Module):
         x = self.fc3(x)
         return x
 
-
-net = OCR_online_chess()
-net.train()
-import torch.optim as optim
-
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(net.parameters(), lr=0.001)
-
-data_loader = data_randomized_loader(batch_size=128, lookahead=100, subsample_empty=10)
-
-data_loader.set_batches(1000)
-updates = 300
-running_loss = 0.0
-for i, data in enumerate(data_loader, 0):
-    inputs, labels = data
-    optimizer.zero_grad()
-    outputs = net(inputs)
-    loss = criterion(outputs, labels)
-    loss.backward()
-    optimizer.step()
-
-    running_loss += loss.item()
-
-    if i % updates == updates - 1:
-        net.eval()
-        with torch.no_grad():
-            inputs, labels = next(data_loader)
-            correct = (torch.argmax(net(inputs), dim=1) == labels).numpy().mean()
-        net.train()
-        print(f"[{i + 1:5d}] val: {correct:1.4f} loss: {running_loss / updates:.8f}")
-        running_loss = 0.0
-
 from pathlib import Path
 path = Path(__file__)
 save_loc = path.parent.absolute() / 'models' / 'chess_online_square.txt'
 
-torch.save(net.state_dict(), str(save_loc))
-print("Finished Training")
+train = False
+if train:
+    OCR_model = OCR_online_chess()
+    OCR_model.train()
+    import torch.optim as optim
+
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(OCR_model.parameters(), lr=0.001)
+
+    data_loader = data_randomized_loader(batch_size=128, lookahead=100, subsample_empty=10)
+
+    data_loader.set_batches(1000)
+    updates = 300
+    running_loss = 0.0
+    for i, data in enumerate(data_loader, 0):
+        inputs, labels = data
+        optimizer.zero_grad()
+        outputs = OCR_model(inputs)
+        loss = criterion(outputs, labels)
+        loss.backward()
+        optimizer.step()
+
+        running_loss += loss.item()
+
+        if i % updates == updates - 1:
+            OCR_model.eval()
+            with torch.no_grad():
+                inputs, labels = next(data_loader)
+                correct = (torch.argmax(OCR_model(inputs), dim=1) == labels).numpy().mean()
+            OCR_model.train()
+            print(f"[{i + 1:5d}] val: {correct:1.4f} loss: {running_loss / updates:.8f}")
+            running_loss = 0.0
+
+    torch.save(OCR_model.state_dict(), str(save_loc))
+    print("Finished Training")
+else:
+    OCR_model = OCR_online_chess()
+    OCR_model.load_state_dict(torch.load(save_loc))
+    OCR_model.eval()
+
+def estimate_online_chess(img):
+    GRID_R = 8
+    GRID_C = 8
+    board = Board()
+
+    batch_imgs = []
+    positions = []
+    for pos, subimg in split_squares(img, GRID_R=GRID_R, GRID_C=GRID_C):
+        batch_imgs.append(subimg)
+        positions.append(pos)
+        r, c = pos
+        square = (GRID_R - 1 - r) * GRID_C + c
+        # TODO put through OCR_model
+    batch_imgs = np.array(batch_imgs)
+    batch_imgs = np.moveaxis(batch_imgs, 3, 1)
+    batch_imgs = batch_imgs / 255
+    batch_imgs = torch.FloatTensor(batch_imgs)
+    # TODO perhaps calc. confidence and throw warning if not confident!
+    estimate = torch.argmax(OCR_model(batch_imgs), dim=1)
+    for item, pos in zip(estimate, ):
+        int_to_symbol(item)
+
+OCR_model
