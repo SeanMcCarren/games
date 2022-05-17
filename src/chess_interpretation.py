@@ -1,7 +1,7 @@
 from chess import Board, Piece
 from data import get_chess
 import cv2
-
+from chess_engine_interface import get_move
 
 # from imutils.perspective import four_point_transform
 from math import floor, ceil
@@ -61,13 +61,17 @@ def int_to_symbol(n):
     if n == 0:
         return None
     else:
-        return 1 + "PNBRQKpnbrqk"[n]
+        return "PNBRQKpnbrqk"[n-1]
 
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+def batch_patches_to_torch(batch_imgs):
+    batch_imgs = np.moveaxis(batch_imgs, 3, 1)
+    batch_imgs = batch_imgs / 255
+    return torch.FloatTensor(batch_imgs)
 
 class data_randomized_loader:
     def __init__(
@@ -106,6 +110,9 @@ class data_randomized_loader:
                         self.empty_count = 0
                         items.append(item)
                         imgs.append(subimg)
+                else:
+                    items.append(item)
+                    imgs.append(subimg)
         self.items = np.array(items)
         self.imgs = np.array(imgs)
 
@@ -134,10 +141,9 @@ class data_randomized_loader:
             self.batch_start : max(self.batch_start + self.batch_size, len(self.index))
         ]
         batch_imgs = self.imgs[batch_index]
-        batch_imgs = np.moveaxis(batch_imgs, 3, 1)
-        batch_imgs = batch_imgs / 255
+        batch_imgs = batch_patches_to_torch(batch_imgs)
         return (
-            torch.FloatTensor(batch_imgs),
+            batch_imgs,
             torch.LongTensor(self.items[batch_index]),
         )
 
@@ -171,8 +177,11 @@ path = Path(__file__)
 save_loc = path.parent.absolute() / 'models' / 'chess_online_square.txt'
 
 train = True
+new = False
 if train:
     OCR_model = OCR_online_chess()
+    if not new:
+        OCR_model.load_state_dict(torch.load(save_loc))
     OCR_model.train()
     import torch.optim as optim
 
@@ -223,14 +232,11 @@ def estimate_online_chess(img):
         # r, c = pos
         # square = (GRID_R - 1 - r) * GRID_C + c
     batch_imgs = np.array(batch_imgs)
-    batch_imgs = np.moveaxis(batch_imgs, 3, 1)
-    batch_imgs = batch_imgs / 255
-    batch_imgs = torch.FloatTensor(batch_imgs)
+    batch_imgs = batch_patches_to_torch(batch_imgs)
     # TODO perhaps calc. confidence and throw warning if not confident!
     OCR_model.eval()
     estimate = OCR_model(batch_imgs)
     estimate = torch.argmax(estimate, dim=1)
-    print(estimate)
     for piece, pos in zip(estimate, positions):
         # Squares go from bottom left to right to top, is range(64)
         r, c = pos
@@ -241,7 +247,8 @@ def estimate_online_chess(img):
         board.set_piece_at(square, piece)
     return board
 
-for fen, img in get_chess(n=1):
+for fen, img in get_chess(n=10):
     board = estimate_online_chess(img)
     print(board.fen())
     print(fen)
+    assert board.fen().split(" ")[0] == fen
