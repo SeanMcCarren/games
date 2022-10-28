@@ -1,0 +1,12 @@
+import game
+from alphabeta import alphabeta
+
+sudoku = game.Sudoku()
+
+for turn in range(9):
+    value, move = alphabeta(sudoku, 4, -1, 1, first=True)
+
+    print("best move is %d with value %d" % (move, value))
+    sudoku.move(move)
+    print(sudoku)
+    if all (sudoku.board != 0): break

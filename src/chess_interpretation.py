@@ -176,7 +176,7 @@ from pathlib import Path
 path = Path(__file__)
 save_loc = path.parent.absolute() / 'models' / 'chess_online_square.txt'
 
-train = True
+train = False
 new = False
 if train:
     OCR_model = OCR_online_chess()
@@ -251,4 +251,6 @@ for fen, img in get_chess(n=10):
     board = estimate_online_chess(img)
     print(board.fen())
     print(fen)
-    assert board.fen().split(" ")[0] == fen
+    if board.fen().split(" ")[0] != fen:
+        cv2.imshow('image',img)
+        cv2.waitKey(0)

@@ -8,3 +8,11 @@ from numpy.random import choice
 def get_move(board):
     legal_moves = list(board.legal_moves)
     return choice(legal_moves)
+
+
+def eval(board):
+    # should take
+    # - board: 8x8x14?
+    # should return:
+    # - heuristic value
+    # - action suggestion (must apply action mask ofc)
